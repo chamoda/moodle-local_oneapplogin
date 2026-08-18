@@ -27,12 +27,30 @@ defined('MOODLE_INTERNAL') || die();
  */
 class hook_callbacks {
 
+    /** Script that issues tokens from a username and password. */
+    const SCRIPT_TOKEN = '/login/token.php';
+
+    /** Script that issues tokens to a browser authenticated session. */
+    const SCRIPT_LAUNCH = '/admin/tool/mobile/launch.php';
+
     /**
-     * Modern replacement for the local_oneapplogin_after_config() callback.
+     * Runs on every request, so it does as little as possible.
+     *
+     * The check lives here rather than in the manager so that manager.php, which is an order of
+     * magnitude larger, is only autoloaded on the handful of requests that are actually app logins.
+     * $SCRIPT is the request path relative to wwwroot, set by initialise_fullme() at setup.php:840,
+     * well before this hook is dispatched at setup.php:1213. It is null under CLI, which never
+     * serves either endpoint.
      *
      * @param \core\hook\after_config $hook
      */
     public static function after_config(\core\hook\after_config $hook): void {
-        manager::bootstrap();
+        global $SCRIPT;
+
+        if ($SCRIPT !== self::SCRIPT_TOKEN && $SCRIPT !== self::SCRIPT_LAUNCH) {
+            return;
+        }
+
+        manager::bootstrap($SCRIPT);
     }
 }

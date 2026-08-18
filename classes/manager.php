@@ -60,37 +60,38 @@ class manager {
     protected static $serviceid = 0;
 
     /**
-     * Entry point called from the \core\hook\after_config hook.
+     * Entry point, called only once hook_callbacks has confirmed this is an app login request.
      *
      * Never lets an exception escape, because a fatal here would take down every page of the site.
+     *
+     * @param string $script the matched script path, relative to wwwroot
      */
-    public static function bootstrap(): void {
+    public static function bootstrap(string $script): void {
         if (self::$ran) {
             return;
         }
         self::$ran = true;
 
         try {
-            self::process_request();
+            self::process_request($script);
         } catch (\Throwable $e) {
-            debugging('local_oneapplogin failed to process the request: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            self::log_error('failed to process the request', $e);
         }
     }
 
     /**
-     * Works out whether this request is an app login and, if so, clears the user's current tokens.
+     * Clears the user's current tokens for the service this login is asking for.
+     *
+     * @param string $script the matched script path, relative to wwwroot
      */
-    protected static function process_request(): void {
+    protected static function process_request(string $script): void {
         global $CFG, $DB, $USER;
 
-        // Cheapest possible check first: this runs on every single page load.
-        $istokenrequest = self::script_is('/login/token.php');
-        $islaunchrequest = self::script_is('/admin/tool/mobile/launch.php');
-        if (!$istokenrequest && !$islaunchrequest) {
-            return;
-        }
+        $istokenrequest = ($script === hook_callbacks::SCRIPT_TOKEN);
 
-        if (during_initial_install() || !empty($CFG->upgraderunning)) {
+        // The hook is dispatched during upgrades too, unlike the legacy callback path, and
+        // token.php refuses to issue anything when web services are off site-wide.
+        if (during_initial_install() || isset($CFG->upgraderunning) || empty($CFG->enablewebservices)) {
             return;
         }
 
@@ -290,7 +291,7 @@ class manager {
                 $DB->insert_record_raw('external_tokens', $token, false, false, true);
             }
         } catch (\Throwable $e) {
-            debugging('local_oneapplogin failed to restore tokens: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            self::log_error('failed to restore tokens', $e);
         }
     }
 
@@ -311,24 +312,23 @@ class manager {
             $event->add_record_snapshot('external_tokens', $token);
             $event->trigger();
         } catch (\Throwable $e) {
-            debugging('local_oneapplogin failed to log a revocation: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            self::log_error('failed to log a revocation', $e);
         }
     }
 
     /**
-     * Checks whether the current request is for the given Moodle script.
+     * Logs an internal failure without ever writing to the response body.
      *
-     * $SCRIPT is the request path relative to wwwroot, set by initialise_fullme() at setup.php:840,
-     * well before the hook is dispatched at setup.php:1213. It is null under CLI, which never
-     * serves these endpoints.
+     * debugging() echoes when $CFG->debugdisplay is on and the script has not set NO_DEBUG_DISPLAY.
+     * launch.php sets nothing, so output here would arrive before its redirect() and turn a broken
+     * plugin into a broken app login. The error log is the only safe destination this early.
      *
-     * @param string $path path relative to wwwroot, e.g. '/login/token.php'
-     * @return bool
+     * @param string $context
+     * @param \Throwable $e
      */
-    protected static function script_is(string $path): bool {
-        global $SCRIPT;
-
-        return !empty($SCRIPT) && $SCRIPT === $path;
+    protected static function log_error(string $context, \Throwable $e): void {
+        // phpcs:ignore moodle.PHP.ForbiddenFunctions.Found
+        error_log('local_oneapplogin ' . $context . ': ' . $e->getMessage());
     }
 
     /**
