@@ -80,6 +80,22 @@ The trade-off is a very small window (the length of one `token.php` request) dur
 service call from that device could come back with `invalidtoken`. The app recovers by prompting for
 a fresh login.
 
+## Moodle compatibility
+
+Verified line by line against `MOODLE_405_STABLE` (Moodle 4.5), which is where it is intended to
+run. `version.php` declares support back to Moodle 3.5, since nothing here uses newer APIs, but
+older branches have not been checked against source.
+
+On Moodle 4.5 both registration paths fire: `lib/setup.php` calls `process_legacy_callbacks()`
+(which runs the `lib.php` function) *and* dispatches the hook (which runs the `db/hooks.php`
+callback). `\core\hook\after_config` does not declare `after_config` as a deprecated callback, so
+the dedup filter in `get_plugins_with_function()` does not strip the legacy one. The static guard in
+`manager::bootstrap()` makes the second call a no-op — on 4.5 that guard is doing real work, not
+just defending against a hypothetical.
+
+Note also that the legacy path is skipped during installs and upgrades but the hook path is not,
+which is why `process_request()` checks `during_initial_install()` and `$CFG->upgraderunning` itself.
+
 ## Installation
 
 Copy this directory to `local/oneapplogin` in your Moodle root, then visit
