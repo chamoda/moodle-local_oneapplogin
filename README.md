@@ -26,22 +26,43 @@ Covers both login flows: `/login/token.php` (username and password) and
 
 ## Installation
 
-From the Moodle root, as the user that owns the code directory:
+### From a ZIP in the admin panel
+
+Build the ZIP from the *parent* of the plugin directory, so the archive has exactly one top level
+folder named `oneapplogin` — Moodle rejects any other structure and takes the plugin name from that
+folder:
+
+```sh
+cd ..
+zip -r oneapplogin.zip oneapplogin -x 'oneapplogin/.git/*'
+```
+
+Then in Moodle: **Site administration → Plugins → Install plugins**, drop the ZIP into *ZIP package*,
+leave *Plugin type* on "Detect type automatically" (`version.php` declares `local_oneapplogin`), and
+click **Install plugin from the ZIP file**. Moodle shows a validation report; click **Continue**,
+then **Upgrade Moodle database now**.
+
+This needs `<moodleroot>/local` to be writable by the web server user. If it is not, Moodle greys the
+option out with a warning, and you have to use the manual method below.
+
+### Manually
+
+Place the files so they land at `<moodleroot>/local/oneapplogin/version.php`, for example:
 
 ```sh
 git clone https://your-host/oneapplogin.git local/oneapplogin
 ```
 
-Or copy the files so they land at `<moodleroot>/local/oneapplogin/version.php`.
-
-Then either visit **Site administration → Notifications** and follow the prompt, or run:
+Then visit **Site administration → Notifications**, or run:
 
 ```sh
 php admin/cli/upgrade.php
 php admin/cli/purge_caches.php
 ```
 
-Confirm it installed under *Site administration → Plugins → Plugins overview*, then configure it at
+### Afterwards
+
+Confirm it under *Site administration → Plugins → Plugins overview*, then configure it at
 *Site administration → Plugins → Local plugins → One app login*.
 
 To uninstall, remove it from *Plugins overview* and delete `local/oneapplogin`. Existing tokens are
