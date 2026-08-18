@@ -27,10 +27,11 @@ defined('MOODLE_INTERNAL') || die();
  * the most recent" instead of minting a new one. Every device therefore ends up holding the same
  * string, and there is no setting or API that makes it issue one token per device.
  *
- * This class runs from the after_config callback, which fires from lib/setup.php on every
- * entry point, well before /login/token.php or /admin/tool/mobile/launch.php look the token up.
- * Deleting the row there forces Moodle to generate a fresh token for the device that is logging
- * in, which invalidates whatever the previously logged in device still holds.
+ * This class runs from the \core\hook\after_config hook, dispatched from lib/setup.php on every
+ * entry point (4.5: setup.php:1213), well before /login/token.php or
+ * /admin/tool/mobile/launch.php look the token up. Deleting the row there forces Moodle to
+ * generate a fresh token for the device that is logging in, which invalidates whatever the
+ * previously logged in device still holds.
  *
  * @package    local_oneapplogin
  * @copyright  2026 Xaventra
@@ -41,8 +42,8 @@ class manager {
     /**
      * Permanent token type.
      *
-     * Mirrors EXTERNAL_TOKEN_PERMANENT / \core_external\token::TYPE_PERMANENT, neither of which is
-     * guaranteed to be loaded this early in the bootstrap.
+     * Mirrors EXTERNAL_TOKEN_PERMANENT, which is not guaranteed to be loaded this early in the
+     * bootstrap.
      */
     const TOKEN_PERMANENT = 0;
 
@@ -59,10 +60,9 @@ class manager {
     protected static $serviceid = 0;
 
     /**
-     * Entry point called from the after_config callback and the \core\hook\after_config hook.
+     * Entry point called from the \core\hook\after_config hook.
      *
-     * Whichever of the two fires first wins; the other becomes a no-op. Never lets an exception
-     * escape, because a fatal here would take down every page of the site.
+     * Never lets an exception escape, because a fatal here would take down every page of the site.
      */
     public static function bootstrap(): void {
         if (self::$ran) {
@@ -318,30 +318,17 @@ class manager {
     /**
      * Checks whether the current request is for the given Moodle script.
      *
+     * $SCRIPT is the request path relative to wwwroot, set by initialise_fullme() at setup.php:840,
+     * well before the hook is dispatched at setup.php:1213. It is null under CLI, which never
+     * serves these endpoints.
+     *
      * @param string $path path relative to wwwroot, e.g. '/login/token.php'
      * @return bool
      */
     protected static function script_is(string $path): bool {
         global $SCRIPT;
 
-        $candidates = [];
-        if (!empty($SCRIPT)) {
-            $candidates[] = $SCRIPT;
-        }
-        foreach (['SCRIPT_FILENAME', 'SCRIPT_NAME', 'PHP_SELF'] as $key) {
-            if (!empty($_SERVER[$key])) {
-                $candidates[] = $_SERVER[$key];
-            }
-        }
-
-        foreach ($candidates as $candidate) {
-            $candidate = str_replace('\\', '/', $candidate);
-            if (substr($candidate, -strlen($path)) === $path) {
-                return true;
-            }
-        }
-
-        return false;
+        return !empty($SCRIPT) && $SCRIPT === $path;
     }
 
     /**
