@@ -74,6 +74,7 @@ left alone; enforcement simply stops.
 | --- | --- | --- |
 | Enable single app session | Yes | Master switch. |
 | Web services | `moodle_mobile_app` | Comma separated short names. `*` covers every service, including custom integrations using `/login/token.php`. |
+| End web sessions too | No | Also signs the user out of the site in browsers when they log in from the app. See below. |
 | Restore token on failed login | Yes | See below. Leave on. |
 
 ## How it decides to revoke
@@ -92,11 +93,28 @@ The password being right is not quite enough, though: Moodle can still refuse a 
 `moodle/webservice:createmobiletoken`). So the deleted rows are snapshotted and reinserted at
 shutdown if no new token appeared, rather than leaving the user signed out of the device they had.
 
+## Ending web sessions
+
+Off by default. When on, a successful app login also calls
+`\core\session\manager::destroy_user_sessions()` for that user, so the account is active in one
+place only. Two deliberate limits:
+
+- Sessions are ended at shutdown, only once Moodle has actually issued a token. A failed or refused
+  login never signs anyone out.
+- The browser based app login (`launch.php`) spares the session it is running in. That flow is
+  driven by a browser session and can re-enter after an OAuth or confirmation redirect, so ending it
+  mid flow would break the login it is performing. Other sessions for that user still go.
+
+Moodle has a related built in setting, `$CFG->limitconcurrentlogins`, which caps concurrent browser
+sessions. It does not know about web service tokens, so it does not cover the app.
+
 ## Testing
 
 1. Log in on device A, then on device B with the same account.
 2. Refresh device A — it should report an expired session and ask for the password.
 3. Check *Reports → Logs* for the "App token revoked" event.
+4. With *End web sessions too* on: log in on the web, then log in on the app, then reload the web
+   page — it should return you to the login screen.
 
 Credential gate:
 

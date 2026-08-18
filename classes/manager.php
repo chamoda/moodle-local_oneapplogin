@@ -59,6 +59,9 @@ class manager {
     /** @var int Service the removed tokens belonged to. */
     protected static $serviceid = 0;
 
+    /** @var string|null Session id to spare when ending the user's web sessions. */
+    protected static $keepsid = null;
+
     /**
      * Entry point, called only once hook_callbacks has confirmed this is an app login request.
      *
@@ -135,20 +138,25 @@ class manager {
         }
 
         $removed = self::revoke_tokens($userid, $service);
-        if (!$removed) {
+        $killsessions = (bool)self::get_setting('killwebsessions', 0);
+
+        if (!$removed && !$killsessions) {
             return;
         }
 
-        // The password was already verified, but token.php can still refuse to issue a token:
-        // maintenance mode, an unconfirmed account, an expired password, a restricted service or a
-        // missing moodle/webservice:createmobiletoken capability. Put the rows back in those cases
-        // so a user who cannot obtain a new token is not left logged out of the device they had.
-        if ($istokenrequest && self::get_setting('restoreonfailedlogin', 1)) {
-            self::$removed = $removed;
-            self::$userid = $userid;
-            self::$serviceid = (int)$service->id;
-            \core_shutdown_manager::register_function([self::class, 'restore_on_failed_login']);
-        }
+        // Both remaining jobs depend on whether Moodle actually issues a token, which is not known
+        // until the request is over, so they run at shutdown. The password was already verified,
+        // but token.php can still refuse afterwards: maintenance mode, an unconfirmed account, an
+        // expired password, a restricted service, a missing moodle/webservice:createmobiletoken.
+        self::$removed = self::get_setting('restoreonfailedlogin', 1) ? $removed : [];
+        self::$userid = $userid;
+        self::$serviceid = (int)$service->id;
+
+        // launch.php is itself driven by a browser session, and re-entering it after an OAuth or
+        // confirmation redirect needs that session to still be there, so spare the current one.
+        self::$keepsid = $istokenrequest ? null : session_id();
+
+        \core_shutdown_manager::register_function([self::class, 'finalise']);
     }
 
     /**
@@ -258,40 +266,51 @@ class manager {
     }
 
     /**
-     * Restores the deleted tokens when the request did not produce a replacement.
+     * Finishes the job once the outcome of the request is known.
      *
-     * Registered as a shutdown function, so it runs whether token.php returned a token, died with
-     * an error or threw. A new token in the table means the login completed and the device that
-     * just logged in owns the session now.
+     * Registered as a shutdown function, so it runs whether the script returned a token, died with
+     * an error or threw. A new token in the table means the login completed; no token means Moodle
+     * refused it, and the user should be left exactly as they were.
      */
-    public static function restore_on_failed_login(): void {
+    public static function finalise(): void {
         global $DB;
 
         try {
-            if (empty(self::$removed)) {
-                return;
-            }
-            $removed = self::$removed;
-            self::$removed = [];
-
             $issued = $DB->record_exists('external_tokens', [
                 'userid' => self::$userid,
                 'externalserviceid' => self::$serviceid,
                 'tokentype' => self::TOKEN_PERMANENT,
             ]);
-            if ($issued) {
+
+            if (!$issued) {
+                self::restore_tokens();
                 return;
             }
 
-            foreach ($removed as $token) {
-                if ($DB->record_exists('external_tokens', ['id' => $token->id])) {
-                    continue;
-                }
-                // Keep the original id so anything referencing it stays consistent.
-                $DB->insert_record_raw('external_tokens', $token, false, false, true);
+            if (self::get_setting('killwebsessions', 0)) {
+                // kill_user_sessions() is deprecated as of 4.5; this is the current name.
+                \core\session\manager::destroy_user_sessions(self::$userid, self::$keepsid);
             }
         } catch (\Throwable $e) {
-            self::log_error('failed to restore tokens', $e);
+            self::log_error('failed to finalise the login', $e);
+        }
+    }
+
+    /**
+     * Puts the revoked tokens back, ids and all, so the existing device keeps working.
+     */
+    protected static function restore_tokens(): void {
+        global $DB;
+
+        $removed = self::$removed;
+        self::$removed = [];
+
+        foreach ($removed as $token) {
+            if ($DB->record_exists('external_tokens', ['id' => $token->id])) {
+                continue;
+            }
+            // Keep the original id so anything referencing it stays consistent.
+            $DB->insert_record_raw('external_tokens', $token, false, false, true);
         }
     }
 

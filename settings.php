@@ -44,6 +44,13 @@ if ($hassiteconfig) {
     ));
 
     $settings->add(new admin_setting_configcheckbox(
+        'local_oneapplogin/killwebsessions',
+        get_string('killwebsessions', 'local_oneapplogin'),
+        get_string('killwebsessions_desc', 'local_oneapplogin'),
+        0
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
         'local_oneapplogin/restoreonfailedlogin',
         get_string('restoreonfailedlogin', 'local_oneapplogin'),
         get_string('restoreonfailedlogin_desc', 'local_oneapplogin'),
