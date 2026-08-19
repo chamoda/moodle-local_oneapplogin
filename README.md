@@ -28,24 +28,8 @@ Covers both login flows: `/login/token.php` (username and password) and
 
 ### From a ZIP in the admin panel
 
-The archive must have exactly one top level folder named `oneapplogin` — the component name from
-`version.php` with the plugin type prefix stripped, i.e. `local_oneapplogin` minus `local_`. Moodle
-compares the folder against that stripped name and rejects anything else, so `local_oneapplogin` is
-wrong too. The checkout is named `moodle-local_oneapplogin`, which is rejected outright (hyphens are
-not valid in a plugin name), so rename it on the way in rather than zipping the directory as it sits:
-
 ```sh
 git archive --format=zip --prefix=oneapplogin/ -o ../oneapplogin.zip HEAD
-```
-
-That packs the committed files only. To include uncommitted work, copy the checkout under the
-required name first:
-
-```sh
-cd ..
-cp -r moodle-local_oneapplogin oneapplogin
-zip -r oneapplogin.zip oneapplogin -x 'oneapplogin/.git/*'
-rm -rf oneapplogin
 ```
 
 Then in Moodle: **Site administration → Plugins → Install plugins**, drop the ZIP into *ZIP package*,
