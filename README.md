@@ -20,7 +20,8 @@ Covers both login flows: `/login/token.php` (username and password) and
 
 ## Requirements
 
-- Moodle 4.5. `version.php` declares `supported = [405, 405]`, and the code targets 4.5 only.
+- Moodle 4.5 or later. No upper bound is declared, so it installs on any newer release; 4.5 is the
+  floor because earlier versions do not dispatch `\core\hook\after_config`.
 - Web services and the mobile service enabled (*Site administration → General → Mobile app → Mobile
   settings*).
 
@@ -81,7 +82,7 @@ left alone; enforcement simply stops.
 - OAuth2, CAS and Shibboleth passwords cannot be pre-verified, so the plugin skips them. Those
   accounts use the browser flow, which is covered.
 - Depends on `\core\hook\after_config` firing on `login/token.php` — core behaviour, not a documented
-  extension point for this. Re-verify after any upgrade beyond 4.5.
+  extension point for this. Re-verify after any major upgrade.
 
 ## Licence
 
