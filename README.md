@@ -87,3 +87,11 @@ left alone; enforcement simply stops.
   accounts use the browser flow, which is covered.
 - Depends on `\core\hook\after_config` firing on `login/token.php` — core behaviour, not a documented
   extension point for this. Re-verify after any upgrade beyond 4.5.
+
+## Licence
+
+Copyright 2026 Xaventra.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. See [LICENSE](LICENSE) for the full text.
